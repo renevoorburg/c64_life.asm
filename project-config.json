@@ -1,0 +1,13 @@
+{
+    "name": "c64test_kick",
+    "description": "Project c64test_kick",
+    "toolkit": "kick",
+    "sources": [
+        "src/main.asm"
+    ],
+    "build": "debug",
+    "definitions": [],
+    "includes": [],
+    "args": [],
+    "compiler": ""
+}
