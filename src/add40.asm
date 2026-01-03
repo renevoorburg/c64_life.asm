@@ -8,15 +8,12 @@ jmp main
 // .const PLOT   = $fff0
 
 .const SCREEN_WIDTH  = 40
-.const SCREEN_HEIGHT = 25
+.const SCREEN_HEIGHT = 19
 
 .const ROW = $fd
 .const COL = $fe
 
 main:
-    lda #$93
-    jsr $ffd2
-
     lda #0
     sta COL
 
@@ -27,6 +24,11 @@ new_column:
 column_print:
     ldx ROW
     ldy COL
+    // clc
+    // jsr PLOT
+
+    // lda #'*'
+    // jsr CHROUT
     jsr plot_char
 
     inc ROW
@@ -44,18 +46,28 @@ column_print:
 .const  SCRPTRH = $fc
 .const  SCREEN = $0400
 
-rowlo:
-    .fill 25, <(SCREEN + i*40)
-rowhi:
-    .fill 25, >(SCREEN + i*40)
-
 plot_char:
-    ldx ROW
-    lda rowlo,x
+    lda #<SCREEN
     sta SCRPTRL
-    lda rowhi,x
+    lda #>SCREEN
     sta SCRPTRH
-    ldy COL
+
+    ldx ROW  
+    beq doneRow
+
+add40:
+    clc
+    lda SCRPTRL
+    adc #40
+    sta SCRPTRL
+    bcc noc
+    inc SCRPTRH
+noc:
+    dex
+    bne add40
+
+doneRow:
     lda #'1'
+    ldy COL
     sta (SCRPTRL),y
     rts
