@@ -1,32 +1,29 @@
-
+// conway's game of life
+// rv
 
 *=$0801
 .byte $0c,$08,$b5,$07,$9e,$20,$32,$30,$36,$32,$00,$00,$00
 jmp main
 
-// .const CHROUT = $ffd2
-// .const PLOT   = $fff0
+.const ROW = $fb
+.const COL = $fc
+.const SCRPTRL = $fd
+.const SCRPTRH = $fe
+.const CURCHAR = $ff
 
 .const SCREEN_WIDTH  = 40
 .const SCREEN_HEIGHT = 25
+.const SCREEN = $0400
 
-.const ROW = $fb
-.const COL = $fc
-
-.const  SCRPTRL = $fd
-.const  SCRPTRH = $fe
-
-.const CURCHAR = $ff
-
-.const  SCREEN = $0400
-
-.const CRSRCHR = 160
-.const SPACECHR = 32
+.const ALIVE = $2a // '*'
+.const EMPTY = $20 // ' '
+.const DYING = $2d // '-'
+.const BORN  = $2b // '+'
 
 main:
     // blank screen
-    // lda #$93
-    // jsr $ffd2
+    lda #$93
+    jsr $ffd2
 
     // prepare keyboard
     lda #1
@@ -34,78 +31,97 @@ main:
     lda #127
     sta $028a  // disable key repeat
 
-    // initial position
+    // set initial cursor position
     lda #5
     sta ROW
     sta COL
 
-print:
+edit_loop:
+    // get character at current position
     ldx ROW
     ldy COL
     jsr get_char
     sta CURCHAR
-    lda #CRSRCHR
+
+ print:
+    // print inversed character   
+    eor #$80
     jsr plot_char
 
 readkey:   
     jsr $ff9f
     jsr $ffe4
     beq readkey
-    cmp #$41         // 'A' in PETSCII
-    beq left
-    cmp #$53         // 'S' in PETSCII
-    beq right
-    cmp #$57         // 'W' in PETSCII
-    beq up
-    cmp #$5A         // 'Z' in PETSCII
-    beq down
-    cmp #$51         // 'Q' in PETSCII
-    beq end
-
+    cmp #$41         // 'A'
+    beq cursor_left
+    cmp #$53         // 'S'
+    beq cursor_right
+    cmp #$57         // 'W'
+    beq cursor_up
+    cmp #$5A         // 'Z'
+    beq cursor_down
+    cmp #$51         // 'Q'
+    beq end_setup
+    cmp #$20         // ' '
+    beq toggle_cell
     jmp readkey
     
-left:
+cursor_left:
     lda COL
     beq readkey
     lda CURCHAR
     jsr plot_char
     dec COL
-    jmp print
+    jmp edit_loop
 
-right: 
+cursor_right: 
     lda COL
     cmp #(SCREEN_WIDTH-1)
     beq readkey
     lda CURCHAR
     jsr plot_char
     inc COL
-    jmp print   
+    jmp edit_loop   
 
-up: 
+cursor_up: 
     lda ROW
     beq readkey
     lda CURCHAR
     jsr plot_char
     dec ROW
-    jmp print
+    jmp edit_loop
 
-down: 
+cursor_down: 
     lda ROW
     cmp #(SCREEN_HEIGHT-1)
     beq readkey
     lda CURCHAR
     jsr plot_char
     inc ROW
-    jmp print
+    jmp edit_loop
 
-end:
+end_setup:
+
+    // we'll reuse COL and ROW
+    // game of life loop here
     rts
-
 
 rowlo:
     .fill 25, <(SCREEN + i*40)
 rowhi:
     .fill 25, >(SCREEN + i*40)
+
+toggle_cell:
+    lda CURCHAR
+    cmp #ALIVE
+    beq _remove_cell
+    lda #ALIVE
+_set_curchar:
+    sta CURCHAR
+    jmp print
+_remove_cell:
+    lda #EMPTY
+    jmp _set_curchar
 
 plot_char:
     pha
