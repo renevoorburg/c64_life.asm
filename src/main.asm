@@ -3,13 +3,7 @@
 
 *=$0801
 .byte $0c,$08,$b5,$07,$9e,$20,$32,$30,$36,$32,$00,$00,$00
-jmp main
-
-.const ROW = $fb
-.const COL = $fc
-.const SCRPTRL = $fd
-.const SCRPTRH = $fe
-.const CURCHAR = $ff
+jmp setup_board
 
 .const SCREEN_WIDTH  = 40
 .const SCREEN_HEIGHT = 25
@@ -20,7 +14,20 @@ jmp main
 .const DYING = $2d // '-'
 .const BORN  = $2b // '+'
 
-main:
+.const ROW = $fb
+.const COL = $fc
+.const SCRPTRL = $fd
+.const SCRPTRH = $fe
+
+CURCHAR:
+    .byte 0
+
+rowlo:
+    .fill 25, <(SCREEN + i*40)
+rowhi:
+    .fill 25, >(SCREEN + i*40)
+
+setup_board:
     // blank screen
     lda #$93
     jsr $ffd2
@@ -37,14 +44,14 @@ main:
     sta COL
 
 edit_loop:
-    // get character at current position
+    // get CURCHAR : character at current position
     ldx ROW
     ldy COL
     jsr get_char
     sta CURCHAR
 
- print:
-    // print inversed character   
+draw_cursor:
+    // draw_cursor as inversed character   
     eor #$80
     jsr plot_char
 
@@ -61,11 +68,12 @@ readkey:
     cmp #$5A         // 'Z'
     beq cursor_down
     cmp #$51         // 'Q'
-    beq end_setup
+    beq calculate_next_gen
     cmp #$20         // ' '
     beq toggle_cell
-    jmp readkey
-    
+    jmp readkey  
+
+
 cursor_left:
     lda COL
     beq readkey
@@ -73,6 +81,7 @@ cursor_left:
     jsr plot_char
     dec COL
     jmp edit_loop
+
 
 cursor_right: 
     lda COL
@@ -83,6 +92,7 @@ cursor_right:
     inc COL
     jmp edit_loop   
 
+
 cursor_up: 
     lda ROW
     beq readkey
@@ -90,6 +100,7 @@ cursor_up:
     jsr plot_char
     dec ROW
     jmp edit_loop
+
 
 cursor_down: 
     lda ROW
@@ -100,16 +111,6 @@ cursor_down:
     inc ROW
     jmp edit_loop
 
-end_setup:
-
-    // we'll reuse COL and ROW
-    // game of life loop here
-    rts
-
-rowlo:
-    .fill 25, <(SCREEN + i*40)
-rowhi:
-    .fill 25, >(SCREEN + i*40)
 
 toggle_cell:
     lda CURCHAR
@@ -118,10 +119,11 @@ toggle_cell:
     lda #ALIVE
 _set_curchar:
     sta CURCHAR
-    jmp print
+    jmp draw_cursor
 _remove_cell:
     lda #EMPTY
     jmp _set_curchar
+
 
 plot_char:
     pha
@@ -144,3 +146,54 @@ get_char:
     ldy COL
     lda (SCRPTRL),y
     rts
+
+COUNTER:
+    .byte
+
+calculate_next_gen:
+    ldy #0
+_new_column:
+    sty COL
+    ldx #0
+_new_row:
+    stx ROW
+    
+    // do stuff
+    // lda #0
+    // sta COUNTER
+
+    // here we count:
+    lda #$2a
+    jsr plot_char
+    ldy COL
+    ldx ROW
+
+    // lda COUNTER
+    // cmp #3
+    // beq cell_born
+
+
+_cont:    
+    inx
+    cpx #SCREEN_HEIGHT
+    bne _new_row
+    iny
+    cpy #SCREEN_WIDTH
+    bne _new_column
+
+// update screen
+
+    rts
+
+cell_born:
+    lda #BORN
+    jmp _cont
+
+cell_lives:
+    lda #ALIVE
+    jmp _cont
+
+cell_dies:
+    lda #DYING
+    jmp _cont
+
