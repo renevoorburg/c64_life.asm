@@ -68,11 +68,13 @@ readkey:
     cmp #$5A         // 'Z'
     beq cursor_down
     cmp #$51         // 'Q'
-    beq calculate_next_gen
+    beq jump_calculate_next_gen
     cmp #$20         // ' '
     beq toggle_cell
     jmp readkey  
 
+jump_calculate_next_gen:
+    jmp calculate_next_gen
 
 cursor_left:
     lda COL
@@ -148,9 +150,59 @@ get_char:
     rts
 
 COUNTER:
-    .byte
+    .byte 0
+
+jmp calculate_next_gen
+
+_compare:
+    jsr get_char
+    cmp #ALIVE
+    beq __count
+    cmp #DYING
+    beq __count
+    rts
+__count:    
+    inc COUNTER
+    rts
+_check_topleft: 
+    dec COL
+    dec ROW
+    jsr _compare
+    rts
+_check_left:
+    inc ROW
+    jsr _compare
+    rts
+_check_bottomleft:
+    inc ROW
+    jsr _compare
+    rts
+_check_below:
+    inc COL
+    jsr _compare
+    rts
+_check_above:
+    dec ROW
+    dec ROW
+    jsr _compare
+    rts
+_check_topright:
+    inc COL
+    jsr _compare
+    rts
+_check_right:
+    inc ROW
+    jsr _compare
+    rts
+_check_bottomright:
+    inc ROW
+    jsr _compare
+    rts
 
 calculate_next_gen:
+    lda CURCHAR
+    jsr plot_char
+
     ldy #0
 _new_column:
     sty COL
@@ -158,20 +210,36 @@ _new_column:
 _new_row:
     stx ROW
     
-    // do stuff
-    // lda #0
-    // sta COUNTER
+    lda #0
+    sta COUNTER
 
-    // here we count:
-    lda #$2a
-    jsr plot_char
+    jsr _check_topleft
+    jsr _check_left
+    jsr _check_bottomleft
+    jsr _check_below
+    jsr _check_above
+    jsr _check_topright
+    jsr _check_right
+    jsr _check_bottomright
+
+_all_counted:
+    // restore COL, ROW. y, x
+    dec COL
     ldy COL
+    dec ROW
     ldx ROW
 
-    // lda COUNTER
-    // cmp #3
-    // beq cell_born
+    jsr get_char
+    sta CURCHAR
 
+    // lda COUNTER
+    // jsr plot_char
+    // ldx ROW
+    // ldy COL
+
+    cmp #ALIVE
+    beq next_with_cell
+    jmp next_no_cell
 
 _cont:    
     inx
@@ -180,20 +248,32 @@ _cont:
     iny
     cpy #SCREEN_WIDTH
     bne _new_column
-
-// update screen
-
     rts
 
-cell_born:
-    lda #BORN
+next_with_cell:
+    lda COUNTER
+    cmp #02
+    bcc next_is_death
+    cmp #04
+    bcs next_is_death
     jmp _cont
 
-cell_lives:
-    lda #ALIVE
+next_no_cell:
+    lda COUNTER
+    cmp #03
+    beq next_is_born
     jmp _cont
 
-cell_dies:
+next_is_death:
     lda #DYING
+    jsr plot_char
+    ldx ROW
+    ldy COL
     jmp _cont
 
+next_is_born:
+    lda #BORN
+    jsr plot_char
+    ldx ROW
+    ldy COL
+    jmp _cont
