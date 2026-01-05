@@ -248,7 +248,42 @@ _cont:
     iny
     cpy #SCREEN_WIDTH
     bne _new_column
+    
+// redraw
+    ldy #0
+redraw_new_column:
+    sty COL
+    ldx #0
+redraw_new_row:
+    stx ROW
+    
+    jsr get_char
+    sta CURCHAR
+    cmp #DYING
+    beq _empty
+    cmp #BORN
+    beq _fill
+
+redraw_cont:
+    ldx ROW
+    ldy COL
+    inx
+    cpx #SCREEN_HEIGHT
+    bne redraw_new_row
+    iny
+    cpy #SCREEN_WIDTH
+    bne redraw_new_column
+    
+// read key
+    jsr $ff9f
+    jsr $ffe4
+    cmp #$51
+    beq quit
+    jmp calculate_next_gen
+
+ quit:
     rts
+
 
 next_with_cell:
     lda COUNTER
@@ -277,3 +312,17 @@ next_is_born:
     ldx ROW
     ldy COL
     jmp _cont
+
+_empty:
+    lda #EMPTY
+    jsr plot_char
+    ldx ROW
+    ldy COL
+    jmp redraw_cont
+
+_fill:
+    lda #ALIVE
+    jsr plot_char
+    ldx ROW
+    ldy COL
+    jmp redraw_cont
