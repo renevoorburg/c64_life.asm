@@ -21,6 +21,8 @@ jmp setup_board
 
 CURCHAR:
     .byte 0
+COUNTER:
+    .byte 0
 
 rowlo:
     .fill 25, <(SCREEN + i*40)
@@ -148,9 +150,6 @@ get_char:
     ldy COL
     lda (SCRPTRL),y
     rts
-
-COUNTER:
-    .byte 0
 
 jmp calculate_next_gen
 
