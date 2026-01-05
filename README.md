@@ -78,6 +78,6 @@ java -jar KickAss.jar life.asm
 ### Run in VICE
 
 ```
-LOAD "LIFE.PRG",8
+LOAD "LIFE.PRG",8,1
 RUN
 ```
