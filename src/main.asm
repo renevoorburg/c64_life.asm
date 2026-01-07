@@ -19,6 +19,7 @@ jmp setup_board
 .const SCRPTRL = $fd
 .const SCRPTRH = $fe
 
+
 CURCHAR:
     .byte 0
 COUNTER:
@@ -31,8 +32,8 @@ rowhi:
 
 setup_board:
     // blank screen
-    // lda #$93
-    // jsr $ffd2
+    lda #$93
+    jsr $ffd2
 
     // prepare keyboard
     lda #1
@@ -247,6 +248,7 @@ calculate_next_gen:
     lda CURCHAR
     jsr plot_char
 
+next_gen_loop:
     ldy #0
 _new_column:
     sty COL
@@ -284,12 +286,6 @@ _new_row:
     jsr load_current_row
     ldx ROW
 
-    // lda COUNTER
-    // jsr plot_char
-    // ldy COL
-    // ldx ROW
-
-
     jsr get_char
     sta CURCHAR
 
@@ -320,6 +316,11 @@ redraw_new_row:
     cmp #BORN
     beq _fill
 
+    // redraw everything, nice when not started with a blank screen
+    // cmp #ALIVE
+    // beq redraw_cont
+    // jmp _empty
+
 redraw_cont:
     ldx ROW
     ldy COL
@@ -329,13 +330,13 @@ redraw_cont:
     iny
     cpy #SCREEN_WIDTH
     bne redraw_new_column
-    
+
 // read key
     jsr $ff9f
     jsr $ffe4
     cmp #$51
     beq quit
-    jmp calculate_next_gen
+    jmp next_gen_loop
 
  quit:
     rts
@@ -369,16 +370,13 @@ next_is_born:
     ldy COL
     jmp _cont
 
+// used by redraw
 _empty:
     lda #EMPTY
     jsr plot_char
-    ldx ROW
-    ldy COL
     jmp redraw_cont
 
 _fill:
     lda #ALIVE
     jsr plot_char
-    ldx ROW
-    ldy COL
     jmp redraw_cont
