@@ -31,8 +31,8 @@ rowhi:
 
 setup_board:
     // blank screen
-    lda #$93
-    jsr $ffd2
+    // lda #$93
+    // jsr $ffd2
 
     // prepare keyboard
     lda #1
@@ -151,101 +151,99 @@ get_char:
     lda (SCRPTRL),y
     rts
 
-jmp calculate_next_gen
 
-_compare:
+COL_SAVE:
+    .byte  0
+ROW_SAVE:
+    .byte  0
+
+count_cell:
     jsr get_char
     cmp #ALIVE
-    beq __count
+    beq increase_counter
     cmp #DYING
-    beq __count
+    beq increase_counter
     rts
-__count:    
+increase_counter:    
     inc COUNTER
     rts
 
-set_left_col:
-    dec COL
-    bmi _column_wrap_right
+save_current_row_col:
+    lda ROW
+    sta ROW_SAVE
+    lda COL
+    sta COL_SAVE
     rts
-_column_wrap_right:
+
+load_current_row:
+    lda ROW_SAVE
+    sta ROW
+    rts
+
+load_current_col:
+    lda COL_SAVE
+    sta COL
+    rts
+
+goto_left_col:
+    dec COL
+    bmi _column_wrap_to_right
+    rts
+_column_wrap_to_right:
     lda #SCREEN_WIDTH-1
     sta COL
     rts
 
-set_mid_col:
-    lda COL
-    cmp #SCREEN_WIDTH-1
-    beq _column_restore_wrapped_right
-    inc COL
+goto_top_row:
+    dec ROW
+    bmi _row_wrap_to_bottom
     rts
-_column_restore_wrapped_right:
-    lda #0
-    sta COL
+_row_wrap_to_bottom:
+    lda #SCREEN_HEIGHT-1
+    sta ROW
     rts
 
-set_right_col:
+goto_right_col:
     inc COL
     lda COL
     cmp #SCREEN_WIDTH
-    beq _column_wrap_left
+    beq _column_wrap_to_left
     rts
-_column_wrap_left:
+_column_wrap_to_left:
     lda #0
     sta COL
     rts
 
-reset_col:
-    dec COL
-    bmi _column_restore_wrapped_left
-    rts
-_column_restore_wrapped_left:
-    lda #SCREEN_WIDTH-1
-    sta COL
-    rts
-
-
-// left column:
-_check_topleft: 
-    jsr set_left_col
-    dec ROW
-    jsr _compare
-    rts
-_check_left:
+goto_bottom_row:
     inc ROW
-    jsr _compare
+    lda ROW
+    cmp #SCREEN_HEIGHT
+    beq _row_wrap_to_top
     rts
-_check_bottomleft:
-    inc ROW
-    jsr _compare
-    rts
-
-// mid column:
-_check_below:
-    jsr set_mid_col
-    jsr _compare
-    rts
-_check_above:
-    dec ROW
-    dec ROW
-    jsr _compare
+_row_wrap_to_top:
+    lda #0
+    sta ROW
     rts
 
+check_row_before:
+    jsr load_current_row
+    jsr goto_top_row
+    jsr count_cell
+    rts
 
-_check_topright:
-    jsr set_right_col
-    jsr _compare
+check_central_row:
+    jsr load_current_row
+    jsr count_cell
     rts
-_check_right:
-    inc ROW
-    jsr _compare
-    rts
-_check_bottomright:
-    inc ROW
-    jsr _compare
+
+check_row_after:
+    jsr load_current_row
+    jsr goto_bottom_row
+    jsr count_cell
     rts
 
 calculate_next_gen:
+    // remove cursor:
     lda CURCHAR
     jsr plot_char
 
@@ -259,29 +257,41 @@ _new_row:
     lda #0
     sta COUNTER
 
-    jsr _check_topleft
-    jsr _check_left
-    jsr _check_bottomleft
-    jsr _check_below
-    jsr _check_above
-    jsr _check_topright
-    jsr _check_right
-    jsr _check_bottomright
+    jsr save_current_row_col
 
-_all_counted:
-    // restore COL, ROW. y, x
-    jsr reset_col
+    jsr goto_left_col
+    // left col:
+    jsr check_row_before
+    jsr check_central_row
+    jsr check_row_after
+
+    jsr load_current_col
+    // central col:
+    jsr check_row_before
+    jsr load_current_row // no count here
+    jsr check_row_after
+
+    jsr goto_right_col
+    // right col:
+    jsr check_row_before
+    jsr check_central_row
+    jsr check_row_after
+
+    // all around counted
+    // reset ROW, COL, y, x
+    jsr load_current_col
     ldy COL
-    dec ROW
+    jsr load_current_row
     ldx ROW
-
-    jsr get_char
-    sta CURCHAR
 
     // lda COUNTER
     // jsr plot_char
-    // ldx ROW
     // ldy COL
+    // ldx ROW
+
+
+    jsr get_char
+    sta CURCHAR
 
     cmp #ALIVE
     beq next_with_cell
