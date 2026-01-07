@@ -163,8 +163,51 @@ _compare:
 __count:    
     inc COUNTER
     rts
-_check_topleft: 
+
+set_left_col:
     dec COL
+    bmi _column_wrap_right
+    rts
+_column_wrap_right:
+    lda #SCREEN_WIDTH-1
+    sta COL
+    rts
+
+set_mid_col:
+    lda COL
+    cmp #SCREEN_WIDTH-1
+    beq _column_restore_wrapped_right
+    inc COL
+    rts
+_column_restore_wrapped_right:
+    lda #0
+    sta COL
+    rts
+
+set_right_col:
+    inc COL
+    lda COL
+    cmp #SCREEN_WIDTH
+    beq _column_wrap_left
+    rts
+_column_wrap_left:
+    lda #0
+    sta COL
+    rts
+
+reset_col:
+    dec COL
+    bmi _column_restore_wrapped_left
+    rts
+_column_restore_wrapped_left:
+    lda #SCREEN_WIDTH-1
+    sta COL
+    rts
+
+
+// left column:
+_check_topleft: 
+    jsr set_left_col
     dec ROW
     jsr _compare
     rts
@@ -176,8 +219,10 @@ _check_bottomleft:
     inc ROW
     jsr _compare
     rts
+
+// mid column:
 _check_below:
-    inc COL
+    jsr set_mid_col
     jsr _compare
     rts
 _check_above:
@@ -185,8 +230,10 @@ _check_above:
     dec ROW
     jsr _compare
     rts
+
+
 _check_topright:
-    inc COL
+    jsr set_right_col
     jsr _compare
     rts
 _check_right:
@@ -223,7 +270,7 @@ _new_row:
 
 _all_counted:
     // restore COL, ROW. y, x
-    dec COL
+    jsr reset_col
     ldy COL
     dec ROW
     ldx ROW
