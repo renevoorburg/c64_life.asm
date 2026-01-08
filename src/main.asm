@@ -304,10 +304,12 @@ _column_wrap_to_left:
     // right col:
 cell_topright:
     jsr check_row_before
+    lda COUNTER
+    beq  all_around_counted  // count can't get more than 2   
     jsr check_central_row
     jsr check_row_after
 
-    // all around counted
+all_around_counted:
     // reset ROW, COL, y, x
     lda COL_SAVE
     sta COL
