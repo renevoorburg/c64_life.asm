@@ -169,31 +169,31 @@ increase_counter:
     inc COUNTER
     rts
 
-save_current_row_col:
-    lda ROW
-    sta ROW_SAVE
-    lda COL
-    sta COL_SAVE
-    rts
+// save_current_row_col:
+    // lda ROW
+    // sta ROW_SAVE
+    // lda COL
+    // sta COL_SAVE
+    // rts
 
-load_current_row:
-    lda ROW_SAVE
-    sta ROW
-    rts
+// load_current_row:
+//     lda ROW_SAVE
+//     sta ROW
+//     rts
 
-load_current_col:
-    lda COL_SAVE
-    sta COL
-    rts
+// load_current_col:
+//     lda COL_SAVE
+//     sta COL
+//     rts
 
-goto_left_col:
-    dec COL
-    bmi _column_wrap_to_right
-    rts
-_column_wrap_to_right:
-    lda #SCREEN_WIDTH-1
-    sta COL
-    rts
+// goto_left_col:
+//     dec COL
+//     bmi _column_wrap_to_right
+//     rts
+// _column_wrap_to_right:
+//     lda #SCREEN_WIDTH-1
+//     sta COL
+//     rts
 
 goto_top_row:
     dec ROW
@@ -204,16 +204,16 @@ _row_wrap_to_bottom:
     sta ROW
     rts
 
-goto_right_col:
-    inc COL
-    lda COL
-    cmp #SCREEN_WIDTH
-    beq _column_wrap_to_left
-    rts
-_column_wrap_to_left:
-    lda #0
-    sta COL
-    rts
+// goto_right_col:
+//     inc COL
+//     lda COL
+//     cmp #SCREEN_WIDTH
+//     beq _column_wrap_to_left
+//     rts
+// _column_wrap_to_left:
+//     lda #0
+//     sta COL
+//     rts
 
 goto_bottom_row:
     inc ROW
@@ -227,18 +227,21 @@ _row_wrap_to_top:
     rts
 
 check_row_before:
-    jsr load_current_row
+    lda ROW_SAVE
+    sta ROW
     jsr goto_top_row
     jsr count_cell
     rts
 
 check_central_row:
-    jsr load_current_row
+    lda ROW_SAVE
+    sta ROW
     jsr count_cell
     rts
 
 check_row_after:
-    jsr load_current_row
+    lda ROW_SAVE
+    sta ROW
     jsr goto_bottom_row
     jsr count_cell
     rts
@@ -259,31 +262,58 @@ _new_row:
     lda #0
     sta COUNTER
 
-    jsr save_current_row_col
+    // save current row:
+    lda ROW
+    sta ROW_SAVE
+    lda COL
+    sta COL_SAVE
 
-    jsr goto_left_col
-    // left col:
+    // goto_left_col
+    dec COL
+    bmi _column_wrap_to_right
+    jmp cell_topleft
+_column_wrap_to_right:
+    lda #SCREEN_WIDTH-1
+    sta COL
+
+cell_topleft:
     jsr check_row_before
     jsr check_central_row
     jsr check_row_after
 
-    jsr load_current_col
+    // jsr load_current_col
     // central col:
+    lda COL_SAVE
+    sta COL
+
     jsr check_row_before
-    jsr load_current_row // no count here
+    lda ROW_SAVE
+    sta ROW
     jsr check_row_after
 
-    jsr goto_right_col
+    // goto_right_col
+    inc COL
+    lda COL
+    cmp #SCREEN_WIDTH
+    beq _column_wrap_to_left
+    jmp cell_topright
+_column_wrap_to_left:
+    lda #0
+    sta COL
+    
     // right col:
+cell_topright:
     jsr check_row_before
     jsr check_central_row
     jsr check_row_after
 
     // all around counted
     // reset ROW, COL, y, x
-    jsr load_current_col
+    lda COL_SAVE
+    sta COL
     ldy COL
-    jsr load_current_row
+    lda ROW_SAVE
+    sta ROW
     ldx ROW
 
     jsr get_char
@@ -311,15 +341,13 @@ redraw_new_row:
     
     jsr get_char
     sta CURCHAR
-    cmp #DYING
-    beq _empty
+    cmp #EMPTY
+    beq redraw_cont
+    cmp #ALIVE
+    beq redraw_cont
     cmp #BORN
     beq _fill
-
-    // redraw everything, nice when not started with a blank screen
-    // cmp #ALIVE
-    // beq redraw_cont
-    // jmp _empty
+    jmp _empty
 
 redraw_cont:
     ldx ROW
