@@ -304,8 +304,6 @@ _column_wrap_to_left:
     // right col:
 cell_topright:
     jsr check_row_before
-    lda COUNTER
-    beq  all_around_counted  // count can't get more than 2   
     jsr check_central_row
     jsr check_row_after
 
@@ -333,6 +331,7 @@ _cont:
     cpy #SCREEN_WIDTH
     bne _new_column
     
+
 // redraw
     ldy #0
 redraw_new_column:
