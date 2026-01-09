@@ -30,6 +30,9 @@ rowlo:
 rowhi:
     .fill 25, >(SCREEN + i*40)
 
+key:
+    .byte 0
+
 setup_board:
     // blank screen
     lda #$93
@@ -42,14 +45,11 @@ setup_board:
     sta $028a  // disable key repeat
 
     // set initial cursor position
-    lda #5
-    sta ROW
-    sta COL
+    ldx #5
+    ldy #5
 
 edit_loop:
     // get CURCHAR : character at current position
-    ldx ROW
-    ldy COL
     jsr get_char
     sta CURCHAR
 
@@ -58,9 +58,15 @@ draw_cursor:
     eor #$80
     jsr plot_char
 
-readkey:   
+readkey:
+    stx ROW
+    sty COL
     jsr $ff9f
     jsr $ffe4
+    sta key
+    ldx ROW
+    ldy COL
+    lda key
     beq readkey
     cmp #$41         // 'A'
     beq cursor_left
@@ -80,42 +86,36 @@ jump_calculate_next_gen:
     jmp calculate_next_gen
 
 cursor_left:
-    lda COL
+    cpy #0
     beq readkey
     lda CURCHAR
     jsr plot_char
-    dec COL
+    dey
     jmp edit_loop
-
 
 cursor_right: 
-    lda COL
-    cmp #(SCREEN_WIDTH-1)
+    cpy #(SCREEN_WIDTH-1)
     beq readkey
     lda CURCHAR
     jsr plot_char
-    inc COL
+    iny
     jmp edit_loop   
 
-
 cursor_up: 
-    lda ROW
+    cpx #0
     beq readkey
     lda CURCHAR
     jsr plot_char
-    dec ROW
+    dex
     jmp edit_loop
-
 
 cursor_down: 
-    lda ROW
-    cmp #(SCREEN_HEIGHT-1)
+    cpx #(SCREEN_HEIGHT-1)
     beq readkey
     lda CURCHAR
     jsr plot_char
-    inc ROW
+    inx
     jmp edit_loop
-
 
 toggle_cell:
     lda CURCHAR
@@ -130,33 +130,28 @@ _remove_cell:
     jmp _set_curchar
 
 
+// routines used by both board setup and calculate and redraw:
+
 plot_char:
     pha
-    ldx ROW
     lda rowlo,x
     sta SCRPTRL
     lda rowhi,x
     sta SCRPTRH
-    ldy COL
     pla
     sta (SCRPTRL),y
     rts
 
 get_char:
-    ldx ROW
     lda rowlo,x
     sta SCRPTRL
     lda rowhi,x
     sta SCRPTRH
-    ldy COL
     lda (SCRPTRL),y
     rts
 
+// 
 
-COL_SAVE:
-    .byte  0
-ROW_SAVE:
-    .byte  0
 
 count_cell:
     jsr get_char
@@ -169,82 +164,43 @@ increase_counter:
     inc COUNTER
     rts
 
-// save_current_row_col:
-    // lda ROW
-    // sta ROW_SAVE
-    // lda COL
-    // sta COL_SAVE
-    // rts
 
-// load_current_row:
-//     lda ROW_SAVE
-//     sta ROW
-//     rts
-
-// load_current_col:
-//     lda COL_SAVE
-//     sta COL
-//     rts
-
-// goto_left_col:
-//     dec COL
-//     bmi _column_wrap_to_right
-//     rts
-// _column_wrap_to_right:
-//     lda #SCREEN_WIDTH-1
-//     sta COL
-//     rts
-
+// routines used for counting cells around center:
 goto_top_row:
-    dec ROW
+    ldx ROW
+    dex
     bmi _row_wrap_to_bottom
     rts
 _row_wrap_to_bottom:
-    lda #SCREEN_HEIGHT-1
-    sta ROW
+    ldx #SCREEN_HEIGHT-1
     rts
 
-// goto_right_col:
-//     inc COL
-//     lda COL
-//     cmp #SCREEN_WIDTH
-//     beq _column_wrap_to_left
-//     rts
-// _column_wrap_to_left:
-//     lda #0
-//     sta COL
-//     rts
 
 goto_bottom_row:
-    inc ROW
-    lda ROW
-    cmp #SCREEN_HEIGHT
+    ldx ROW
+    inx
+    cpx #SCREEN_HEIGHT
     beq _row_wrap_to_top
     rts
 _row_wrap_to_top:
-    lda #0
-    sta ROW
+    ldx #0
     rts
 
 check_row_before:
-    lda ROW_SAVE
-    sta ROW
     jsr goto_top_row
     jsr count_cell
     rts
 
 check_central_row:
-    lda ROW_SAVE
-    sta ROW
+    ldx ROW
     jsr count_cell
     rts
 
 check_row_after:
-    lda ROW_SAVE
-    sta ROW
     jsr goto_bottom_row
     jsr count_cell
     rts
+
 
 calculate_next_gen:
     // remove cursor:
@@ -254,7 +210,6 @@ calculate_next_gen:
 next_gen_loop:
     ldy #0
 _new_column:
-    sty COL
     ldx #0
 _new_row:
     stx ROW
@@ -262,19 +217,16 @@ _new_row:
     lda #0
     sta COUNTER
 
-    // save current row:
-    lda ROW
-    sta ROW_SAVE
-    lda COL
-    sta COL_SAVE
+    // save current field
+    stx ROW
+    sty COL
 
     // goto_left_col
-    dec COL
+    dey
     bmi _column_wrap_to_right
     jmp cell_topleft
 _column_wrap_to_right:
-    lda #SCREEN_WIDTH-1
-    sta COL
+    ldy #SCREEN_WIDTH-1
 
 cell_topleft:
     jsr check_row_before
@@ -283,23 +235,19 @@ cell_topleft:
 
     // jsr load_current_col
     // central col:
-    lda COL_SAVE
-    sta COL
+    ldy COL
 
     jsr check_row_before
-    lda ROW_SAVE
-    sta ROW
+    ldx ROW
     jsr check_row_after
 
     // goto_right_col
-    inc COL
-    lda COL
-    cmp #SCREEN_WIDTH
+    iny
+    cpy #SCREEN_WIDTH
     beq _column_wrap_to_left
     jmp cell_topright
 _column_wrap_to_left:
-    lda #0
-    sta COL
+    ldy #0
     
     // right col:
 cell_topright:
@@ -309,11 +257,7 @@ cell_topright:
 
 all_around_counted:
     // reset ROW, COL, y, x
-    lda COL_SAVE
-    sta COL
     ldy COL
-    lda ROW_SAVE
-    sta ROW
     ldx ROW
 
     jsr get_char
