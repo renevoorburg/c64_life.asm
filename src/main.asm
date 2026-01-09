@@ -164,44 +164,6 @@ increase_counter:
     inc COUNTER
     rts
 
-
-// routines used for counting cells around center:
-goto_top_row:
-    ldx ROW
-    dex
-    bmi _row_wrap_to_bottom
-    rts
-_row_wrap_to_bottom:
-    ldx #SCREEN_HEIGHT-1
-    rts
-
-
-goto_bottom_row:
-    ldx ROW
-    inx
-    cpx #SCREEN_HEIGHT
-    beq _row_wrap_to_top
-    rts
-_row_wrap_to_top:
-    ldx #0
-    rts
-
-check_row_before:
-    jsr goto_top_row
-    jsr count_cell
-    rts
-
-check_central_row:
-    ldx ROW
-    jsr count_cell
-    rts
-
-check_row_after:
-    jsr goto_bottom_row
-    jsr count_cell
-    rts
-
-
 calculate_next_gen:
     // remove cursor:
     lda CURCHAR
@@ -221,39 +183,87 @@ _new_row:
     stx ROW
     sty COL
 
-    // goto_left_col
+// left column:
     dey
     bmi _column_wrap_to_right
-    jmp cell_topleft
+    jmp cell_top_left
 _column_wrap_to_right:
     ldy #SCREEN_WIDTH-1
 
-cell_topleft:
-    jsr check_row_before
-    jsr check_central_row
-    jsr check_row_after
+cell_top_left:
+    dex
+    bmi _row_wrap_to_bottom_leftcol
+    jmp count_top_left
+_row_wrap_to_bottom_leftcol:
+    ldx #SCREEN_HEIGHT-1
+count_top_left:
+    jsr count_cell
 
-    // jsr load_current_col
-    // central col:
-    ldy COL
-
-    jsr check_row_before
+cell_mid_left:
     ldx ROW
-    jsr check_row_after
+    jsr count_cell
 
-    // goto_right_col
+cell_bottom_left:
+    inx
+    cpx #SCREEN_HEIGHT
+    beq _row_wrap_to_top
+    jmp count_bottom_left
+_row_wrap_to_top:
+    ldx #0
+count_bottom_left:
+    jsr count_cell
+
+// central column:
+    ldy COL
+    ldx ROW
+    dex
+    bmi _row_wrap_to_bottom_midcol
+    jmp cell_top_center
+_row_wrap_to_bottom_midcol:
+    ldx #SCREEN_HEIGHT-1
+cell_top_center:
+    jsr count_cell
+
+    ldx ROW
+    inx
+    cpx #SCREEN_HEIGHT
+    beq _row_wrap_to_top_midcol
+    jmp cell_bottom_center
+_row_wrap_to_top_midcol:
+    ldx #0
+cell_bottom_center:
+    jsr count_cell
+
+// right col:
     iny
     cpy #SCREEN_WIDTH
     beq _column_wrap_to_left
-    jmp cell_topright
+    jmp cell_top_right
 _column_wrap_to_left:
     ldy #0
     
-    // right col:
-cell_topright:
-    jsr check_row_before
-    jsr check_central_row
-    jsr check_row_after
+cell_top_right:
+    ldx ROW
+    dex
+    bmi _row_wrap_to_bottom_rightcol
+    jmp count_cell_top_right
+_row_wrap_to_bottom_rightcol:
+    ldx #SCREEN_HEIGHT-1
+count_cell_top_right:
+    jsr count_cell
+
+    ldx ROW
+    jsr count_cell
+
+    inx
+    cpx #SCREEN_HEIGHT
+    beq _row_wrap_to_top_rightcol
+    jmp count_bottom_right
+_row_wrap_to_top_rightcol:
+    ldx #0
+count_bottom_right:
+    jsr count_cell
+
 
 all_around_counted:
     // reset ROW, COL, y, x
@@ -270,13 +280,21 @@ all_around_counted:
 _cont:    
     inx
     cpx #SCREEN_HEIGHT
-    bne _new_row
+    bne new_row_jmp
     iny
     cpy #SCREEN_WIDTH
-    bne _new_column
+    bne new_column_jmp
     
 
-// redraw
+// trampoline:
+    jmp redraw
+new_row_jmp:
+    jmp _new_row  
+new_column_jmp:
+    jmp _new_column
+
+
+redraw:
     ldy #0
 redraw_new_column:
     sty COL
@@ -287,14 +305,14 @@ redraw_new_row:
     jsr get_char
     sta CURCHAR
     cmp #EMPTY
-    beq redraw_cont
+    beq redraw_continued
     cmp #ALIVE
-    beq redraw_cont
+    beq redraw_continued
     cmp #BORN
-    beq _fill
-    jmp _empty
+    beq set_alive
+    jmp set_empty
 
-redraw_cont:
+redraw_continued:
     ldx ROW
     ldy COL
     inx
@@ -314,7 +332,6 @@ redraw_cont:
  quit:
     rts
 
-
 next_with_cell:
     lda COUNTER
     cmp #02
@@ -332,24 +349,21 @@ next_no_cell:
 next_is_death:
     lda #DYING
     jsr plot_char
-    ldx ROW
-    ldy COL
     jmp _cont
 
 next_is_born:
     lda #BORN
     jsr plot_char
-    ldx ROW
-    ldy COL
     jmp _cont
 
 // used by redraw
-_empty:
+set_empty:
     lda #EMPTY
     jsr plot_char
-    jmp redraw_cont
+    jmp redraw_continued
 
-_fill:
+set_alive:
     lda #ALIVE
     jsr plot_char
-    jmp redraw_cont
+    jmp redraw_continued
+
