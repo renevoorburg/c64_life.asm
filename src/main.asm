@@ -165,10 +165,9 @@ increase_counter:
     rts
 
 calculate_next_gen:
-    // remove cursor:
+    // remove inverted cursor:
     lda CURCHAR
     jsr plot_char
-
 next_gen_loop:
     ldy #0
 _new_column:
@@ -179,7 +178,6 @@ _new_row:
     lda #0
     sta COUNTER
 
-    // save current field
     stx ROW
     sty COL
 
@@ -297,11 +295,8 @@ new_column_jmp:
 redraw:
     ldy #0
 redraw_new_column:
-    sty COL
     ldx #0
-redraw_new_row:
-    stx ROW
-    
+redraw_new_row:    
     jsr get_char
     sta CURCHAR
     cmp #EMPTY
@@ -311,10 +306,7 @@ redraw_new_row:
     cmp #BORN
     beq set_alive
     jmp set_empty
-
 redraw_continued:
-    ldx ROW
-    ldy COL
     inx
     cpx #SCREEN_HEIGHT
     bne redraw_new_row
