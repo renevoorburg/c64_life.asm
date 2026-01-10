@@ -1,7 +1,7 @@
 // conway's game of life
 // rv
 
-*=$0c01
+*=$0801
 BasicUpstart2(setup_board)
 
 .const SCREEN_WIDTH  = 40
@@ -11,8 +11,6 @@ BasicUpstart2(setup_board)
 
 .const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
-.const DYING = $2d // '-'
-.const BORN  = $2b // '+'
 
 .const READBASELO = $f7
 .const READBASEHI = $f8
@@ -217,14 +215,13 @@ get_char:
 // 
 
 
-count_cell:
+.macro COUNT_CELL() {
     jsr get_char
     cmp #ALIVE
-    beq increase_counter
-    rts
-increase_counter:    
+    bne !+
     inc COUNTER
-    rts
+!:
+}
 
 calculate_next_gen:
     // remove inverted cursor:
@@ -259,11 +256,11 @@ cell_top_left:
 _row_wrap_to_bottom_leftcol:
     ldx #SCREEN_HEIGHT-1
 count_top_left:
-    jsr count_cell
+    COUNT_CELL()
 
 cell_mid_left:
     ldx ROW
-    jsr count_cell
+    COUNT_CELL()
 
 cell_bottom_left:
     inx
@@ -273,7 +270,7 @@ cell_bottom_left:
 _row_wrap_to_top:
     ldx #0
 count_bottom_left:
-    jsr count_cell
+    COUNT_CELL()
 
 // central column:
     ldy COL
@@ -284,7 +281,7 @@ count_bottom_left:
 _row_wrap_to_bottom_midcol:
     ldx #SCREEN_HEIGHT-1
 cell_top_center:
-    jsr count_cell
+    COUNT_CELL()
 
     ldx ROW
     inx
@@ -294,7 +291,7 @@ cell_top_center:
 _row_wrap_to_top_midcol:
     ldx #0
 cell_bottom_center:
-    jsr count_cell
+    COUNT_CELL()
 
 // right col:
     iny
@@ -312,10 +309,10 @@ cell_top_right:
 _row_wrap_to_bottom_rightcol:
     ldx #SCREEN_HEIGHT-1
 count_cell_top_right:
-    jsr count_cell
+    COUNT_CELL()
 
     ldx ROW
-    jsr count_cell
+    COUNT_CELL()
 
     inx
     cpx #SCREEN_HEIGHT
@@ -324,7 +321,7 @@ count_cell_top_right:
 _row_wrap_to_top_rightcol:
     ldx #0
 count_bottom_right:
-    jsr count_cell
+    COUNT_CELL()
 
 
 all_around_counted:
@@ -382,14 +379,12 @@ next_with_cell:
     cmp #04
     bcs next_is_empty
     jmp next_is_alive
-    jmp _cont
 
 next_no_cell:
     lda COUNTER
     cmp #03
     beq next_is_alive
     jmp next_is_empty
-    jmp _cont
 
 next_is_empty:
     lda #EMPTY
