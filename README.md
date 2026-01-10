@@ -60,7 +60,7 @@ The program includes an interactive **editor/setup phase** to define the initial
 
 Cells are stored as:
 - `*` — alive  
-- `' '` — empty  
+- ` ` — empty  
 
 (Intermediate states are avoided by writing the next generation directly into the off-screen buffer.)
 
