@@ -1,48 +1,77 @@
 // conway's game of life
 // rv
 
-*=$0801
-.byte $0c,$08,$b5,$07,$9e,$20,$32,$30,$36,$32,$00,$00,$00
-jmp setup_board
+*=$0c01
+BasicUpstart2(setup_board)
 
 .const SCREEN_WIDTH  = 40
 .const SCREEN_HEIGHT = 25
-.const SCREEN = $0400
+.const SCREEN0 = $0400
+.const SCREEN1 = $2000 
 
 .const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
 .const DYING = $2d // '-'
 .const BORN  = $2b // '+'
 
-.const ROW = $fb
-.const COL = $fc
-.const SCRPTRL = $fd
-.const SCRPTRH = $fe
-
+.const READBASELO = $f7
+.const READBASEHI = $f8
+.const WRITEBASELO = $f9
+.const WRITEBASEHI = $fa
+.const COL = $fb
+.const ROW = $fc
+.const SCRPTRLO = $fd
+.const SCRPTRHI = $fe
 
 CURCHAR:
     .byte 0
 COUNTER:
     .byte 0
 
-rowlo:
-    .fill 25, <(SCREEN + i*40)
-rowhi:
-    .fill 25, >(SCREEN + i*40)
+rowoff_lo:
+    .fill 25, <(i*40)
+rowoff_hi:
+    .fill 25, >(i*40)
 
 key:
     .byte 0
 
 setup_board:
     // blank screen
-    lda #$93
-    jsr $ffd2
+    // lda #$93
+    // jsr $ffd2
 
     // prepare keyboard
     lda #1
     sta $0289  //  disable keyboard buffer
     lda #127
     sta $028a  // disable key repeat
+
+    // prepare screen
+    jsr display_screen0
+
+    // clean  screen1
+    ldy #0
+redraw_new_column:
+    sty COL
+    ldx #0
+redraw_new_row:
+    stx ROW
+    lda #EMPTY
+    jsr plot_char
+    ldx ROW
+    ldy COL
+    inx
+    cpx #SCREEN_HEIGHT
+    bne redraw_new_row
+    iny
+    cpy #SCREEN_WIDTH
+    bne redraw_new_column
+
+    lda #<SCREEN0   // write to screen0
+    sta WRITEBASELO
+    lda #>SCREEN0
+    sta WRITEBASEHI
 
     // set initial cursor position
     ldx #5
@@ -130,24 +159,59 @@ _remove_cell:
     jmp _set_curchar
 
 
-// routines used by both board setup and calculate and redraw:
+flip_screen:
+    lda READBASEHI
+    cmp #>SCREEN0
+    beq display_screen1
+
+display_screen0:
+    lda #$14        // show screen0 - $0400
+    sta $d018
+    lda #<SCREEN0   // read from screen0
+    sta READBASELO
+    lda #>SCREEN0
+    sta READBASEHI
+    lda #<SCREEN1   // write to screen1
+    sta WRITEBASELO
+    lda #>SCREEN1
+    sta WRITEBASEHI
+    rts
+
+display_screen1:
+    lda #$84        // show screen1 - $0800
+    sta $d018
+    lda #<SCREEN1   // read from screen1
+    sta READBASELO
+    lda #>SCREEN1
+    sta READBASEHI
+    lda #<SCREEN0   // write to screen0
+    sta WRITEBASELO
+    lda #>SCREEN0
+    sta WRITEBASEHI
+    rts
 
 plot_char:
     pha
-    lda rowlo,x
-    sta SCRPTRL
-    lda rowhi,x
-    sta SCRPTRH
+    lda rowoff_lo,x
+    clc
+    adc WRITEBASELO
+    sta SCRPTRLO
+    lda rowoff_hi,x
+    adc WRITEBASEHI
+    sta SCRPTRHI
     pla
-    sta (SCRPTRL),y
+    sta (SCRPTRLO),y
     rts
 
 get_char:
-    lda rowlo,x
-    sta SCRPTRL
-    lda rowhi,x
-    sta SCRPTRH
-    lda (SCRPTRL),y
+    lda rowoff_lo,x
+    clc
+    adc READBASELO
+    sta SCRPTRLO
+    lda rowoff_hi,x
+    adc READBASEHI
+    sta SCRPTRHI
+    lda (SCRPTRLO),y
     rts
 
 // 
@@ -156,8 +220,6 @@ get_char:
 count_cell:
     jsr get_char
     cmp #ALIVE
-    beq increase_counter
-    cmp #DYING
     beq increase_counter
     rts
 increase_counter:    
@@ -168,6 +230,8 @@ calculate_next_gen:
     // remove inverted cursor:
     lda CURCHAR
     jsr plot_char
+
+    jsr display_screen0 // setup screen for switching
 next_gen_loop:
     ldy #0
 _new_column:
@@ -293,69 +357,46 @@ new_column_jmp:
 
 
 redraw:
-    ldy #0
-redraw_new_column:
-    ldx #0
-redraw_new_row:    
-    jsr get_char
-    sta CURCHAR
-    cmp #EMPTY
-    beq redraw_continued
-    cmp #ALIVE
-    beq redraw_continued
-    cmp #BORN
-    beq set_alive
-    jmp set_empty
-redraw_continued:
-    inx
-    cpx #SCREEN_HEIGHT
-    bne redraw_new_row
-    iny
-    cpy #SCREEN_WIDTH
-    bne redraw_new_column
+    jsr flip_screen
 
 // read key
     jsr $ff9f
     jsr $ffe4
     cmp #$51
     beq quit
+    cmp #$45         // 'E'
+    beq jump_edit_loop
     jmp next_gen_loop
 
  quit:
+    jsr display_screen0
     rts
+
+jump_edit_loop:
+    jmp edit_loop
 
 next_with_cell:
     lda COUNTER
     cmp #02
-    bcc next_is_death
+    bcc next_is_empty
     cmp #04
-    bcs next_is_death
+    bcs next_is_empty
+    jmp next_is_alive
     jmp _cont
 
 next_no_cell:
     lda COUNTER
     cmp #03
-    beq next_is_born
+    beq next_is_alive
+    jmp next_is_empty
     jmp _cont
 
-next_is_death:
-    lda #DYING
-    jsr plot_char
-    jmp _cont
-
-next_is_born:
-    lda #BORN
-    jsr plot_char
-    jmp _cont
-
-// used by redraw
-set_empty:
+next_is_empty:
     lda #EMPTY
     jsr plot_char
-    jmp redraw_continued
+    jmp _cont
 
-set_alive:
+next_is_alive:
     lda #ALIVE
     jsr plot_char
-    jmp redraw_continued
-
+    jmp _cont
