@@ -1,6 +1,8 @@
 // conway's game of life
 // rv
 
+// speedtest: glider down 49s
+
 *=$0801
 BasicUpstart2(setup_board)
 
@@ -12,10 +14,10 @@ BasicUpstart2(setup_board)
 .const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
 
-.const READBASELO = $f7
-.const READBASEHI = $f8
-.const WRITEBASELO = $f9
-.const WRITEBASEHI = $fa
+.const S0BASELO = $f7
+.const S0BASEHI = $f8
+.const S1BASELO = $f9
+.const S1BASEHI = $fa
 .const COL = $fb
 .const ROW = $fc
 .const SCRPTRLO = $fd
@@ -26,10 +28,15 @@ CURCHAR:
 COUNTER:
     .byte 0
 
-rowoff_lo:
-    .fill 25, <(i*40)
-rowoff_hi:
-    .fill 25, >(i*40)
+rowoff0_lo:
+    .fill 25, <(SCREEN0 + i*40)
+rowoff0_hi:
+    .fill 25, >(SCREEN0 + i*40)
+
+rowoff1_lo:
+    .fill 25, <(SCREEN1 + i*40)
+rowoff1_hi:
+    .fill 25, >(SCREEN1 + i*40)
 
 key:
     .byte 0
@@ -45,9 +52,6 @@ setup_board:
     lda #127
     sta $028a  // disable key repeat
 
-    // prepare screen
-    jsr display_screen0
-
     // clean  screen1
     ldy #0
 redraw_new_column:
@@ -56,7 +60,7 @@ redraw_new_column:
 redraw_new_row:
     stx ROW
     lda #EMPTY
-    jsr plot_char
+    jsr plot_char1
     ldx ROW
     ldy COL
     inx
@@ -66,10 +70,6 @@ redraw_new_row:
     cpy #SCREEN_WIDTH
     bne redraw_new_column
 
-    lda #<SCREEN0   // write to screen0
-    sta WRITEBASELO
-    lda #>SCREEN0
-    sta WRITEBASEHI
 
     // set initial cursor position
     ldx #5
@@ -77,13 +77,13 @@ redraw_new_row:
 
 edit_loop:
     // get CURCHAR : character at current position
-    jsr get_char
+    jsr get_char0
     sta CURCHAR
 
 draw_cursor:
     // draw_cursor as inversed character   
     eor #$80
-    jsr plot_char
+    jsr plot_char0
 
 readkey:
     stx ROW
@@ -116,7 +116,7 @@ cursor_left:
     cpy #0
     beq readkey
     lda CURCHAR
-    jsr plot_char
+    jsr plot_char0
     dey
     jmp edit_loop
 
@@ -124,7 +124,7 @@ cursor_right:
     cpy #(SCREEN_WIDTH-1)
     beq readkey
     lda CURCHAR
-    jsr plot_char
+    jsr plot_char0
     iny
     jmp edit_loop   
 
@@ -132,7 +132,7 @@ cursor_up:
     cpx #0
     beq readkey
     lda CURCHAR
-    jsr plot_char
+    jsr plot_char0
     dex
     jmp edit_loop
 
@@ -140,7 +140,7 @@ cursor_down:
     cpx #(SCREEN_HEIGHT-1)
     beq readkey
     lda CURCHAR
-    jsr plot_char
+    jsr plot_char0
     inx
     jmp edit_loop
 
@@ -158,56 +158,82 @@ _remove_cell:
 
 
 flip_screen:
-    lda READBASEHI
-    cmp #>SCREEN0
+    lda $d018
+    and #$f0
+    cmp #$10
     beq display_screen1
 
 display_screen0:
     lda #$14        // show screen0 - $0400
     sta $d018
-    lda #<SCREEN0   // read from screen0
-    sta READBASELO
-    lda #>SCREEN0
-    sta READBASEHI
-    lda #<SCREEN1   // write to screen1
-    sta WRITEBASELO
-    lda #>SCREEN1
-    sta WRITEBASEHI
+
+    // write to screen1
+    lda #<plot_char1
+    sta plot_char + 1
+    lda #>plot_char1
+    sta plot_char + 2
+
+    // read from screen0
+    lda #<get_char0
+    sta get_char + 1
+    lda #>get_char0
+    sta get_char + 2
     rts
 
 display_screen1:
     lda #$84        // show screen1 - $0800
     sta $d018
-    lda #<SCREEN1   // read from screen1
-    sta READBASELO
-    lda #>SCREEN1
-    sta READBASEHI
-    lda #<SCREEN0   // write to screen0
-    sta WRITEBASELO
-    lda #>SCREEN0
-    sta WRITEBASEHI
+    // write to screen0
+    lda #<plot_char0
+    sta plot_char + 1
+    lda #>plot_char0
+    sta plot_char + 2
+
+    // read from screen1
+    lda #<get_char1
+    sta get_char + 1
+    lda #>get_char1
+    sta get_char + 2
     rts
 
 plot_char:
+    jmp plot_char0 // dynamically changed
+
+plot_char0:
     pha
-    lda rowoff_lo,x
-    clc
-    adc WRITEBASELO
+    lda rowoff0_lo,x
     sta SCRPTRLO
-    lda rowoff_hi,x
-    adc WRITEBASEHI
+    lda rowoff0_hi,x
+    sta SCRPTRHI
+    pla
+    sta (SCRPTRLO),y
+    rts
+
+plot_char1:
+    pha
+    lda rowoff1_lo,x
+    sta SCRPTRLO
+    lda rowoff1_hi,x
     sta SCRPTRHI
     pla
     sta (SCRPTRLO),y
     rts
 
 get_char:
-    lda rowoff_lo,x
-    clc
-    adc READBASELO
+    jmp get_char0 // dynamically changed
+
+get_char0:
+    lda rowoff0_lo,x
     sta SCRPTRLO
-    lda rowoff_hi,x
-    adc READBASEHI
+    lda rowoff0_hi,x
+    sta SCRPTRHI
+    lda (SCRPTRLO),y
+    rts
+
+get_char1:
+    lda rowoff1_lo,x
+    sta SCRPTRLO
+    lda rowoff1_hi,x
     sta SCRPTRHI
     lda (SCRPTRLO),y
     rts
@@ -217,7 +243,7 @@ get_char:
 
 .macro COUNT_CELL() {
     jsr get_char
-    cmp #ALIVE
+    eor #ALIVE
     bne !+
     inc COUNTER
 !:
@@ -366,7 +392,20 @@ redraw:
     jmp next_gen_loop
 
  quit:
-    jsr display_screen0
+    lda #$14        // show screen0 - $0400
+    sta $d018
+
+    // reset dynamic code
+    lda #<plot_char0
+    sta plot_char + 1
+    lda #>plot_char0
+    sta plot_char + 2
+
+    lda #<get_char0
+    sta get_char + 1
+    lda #>get_char0
+    sta get_char + 2
+
     rts
 
 jump_edit_loop:
@@ -389,9 +428,8 @@ next_no_cell:
 next_is_empty:
     lda #EMPTY
     jsr plot_char
-    jmp _cont
 
 next_is_alive:
     lda #ALIVE
     jsr plot_char
-    jmp _cont
+ 
