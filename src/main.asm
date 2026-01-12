@@ -428,8 +428,10 @@ next_no_cell:
 next_is_empty:
     lda #EMPTY
     jsr plot_char
+    jmp _cont
 
 next_is_alive:
     lda #ALIVE
     jsr plot_char
+    jmp _cont
  
