@@ -1,7 +1,7 @@
 // conway's game of life
 // rv
 
-// speedtest: glider down 49s
+// speedtest: glider down 33s
 
 *=$0801
 BasicUpstart2(setup_board)
