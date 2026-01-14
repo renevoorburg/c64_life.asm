@@ -68,7 +68,6 @@ redraw_new_row:
     cpy #SCREEN_WIDTH
     bne redraw_new_column
 
-
     // set initial cursor position
     ldx #5
     ldy #5
@@ -365,29 +364,34 @@ count_bottom_left_cell:
 // bottom_right_cell:
     iny
     cpy #SCREEN_WIDTH
-    beq !+
+    beq !wrap+
     jmp count_bottom_right_cell
-!:
+!wrap:
     ldy #0
 
 count_bottom_right_cell:
     COUNT_CELL_ROWPTR_SET() 
-
 
 all_around_counted:
     // reset ROW, COL, y, x
     ldy COL
     ldx ROW
 
-    // jsr get_char
-    // sta CURCHAR
-
     lda CURCHAR
     cmp #ALIVE
-    beq next_with_cell
-    jmp next_no_cell
+    bne no_cell_next_gen
+    
+    lda COUNTER
+    cmp #02
+    bcc set_empty_next_gen
+    cmp #04
+    bcs set_empty_next_gen
+set_alive_next_gen:
+    lda #ALIVE
+    jsr plot_char
+    jmp continue_next_gen_loop
 
-_cont:    
+continue_next_gen_loop:    
     inx
     cpx #SCREEN_HEIGHT
     bne new_row_jmp
@@ -395,16 +399,6 @@ _cont:
     cpy #SCREEN_WIDTH
     bne new_column_jmp
     
-
-// trampoline:
-    jmp redraw
-new_row_jmp:
-    jmp _new_row  
-new_column_jmp:
-    jmp _new_column
-
-
-redraw:
     jsr flip_screen
 
 // read key
@@ -415,6 +409,12 @@ redraw:
     cmp #$45         // 'E'
     beq jump_edit_loop
     jmp next_gen_loop
+
+// trampoline:
+new_row_jmp:
+    jmp _new_row  
+new_column_jmp:
+    jmp _new_column
 
  quit:
     lda #$14        // show screen0 - $0400
@@ -436,27 +436,11 @@ redraw:
 jump_edit_loop:
     jmp edit_loop
 
-next_with_cell:
-    lda COUNTER
-    cmp #02
-    bcc next_is_empty
-    cmp #04
-    bcs next_is_empty
-    jmp next_is_alive
-
-next_no_cell:
+no_cell_next_gen:
     lda COUNTER
     cmp #03
-    beq next_is_alive
-    jmp next_is_empty
-
-next_is_empty:
+    beq set_alive_next_gen
+set_empty_next_gen:
     lda #EMPTY
     jsr plot_char
-    jmp _cont
-
-next_is_alive:
-    lda #ALIVE
-    jsr plot_char
-    jmp _cont
- 
+    jmp continue_next_gen_loop
