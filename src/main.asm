@@ -14,6 +14,9 @@ BasicUpstart2(setup_board)
 .const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
 
+.const CURCHAR = $02
+.const COUNTER = $03
+
 .const S0BASELO = $f7
 .const S0BASEHI = $f8
 .const S1BASELO = $f9
@@ -22,11 +25,6 @@ BasicUpstart2(setup_board)
 .const ROW = $fc
 .const SCRPTRLO = $fd
 .const SCRPTRHI = $fe
-
-CURCHAR:
-    .byte 0
-COUNTER:
-    .byte 0
 
 rowoff0_lo:
     .fill 25, <(SCREEN0 + i*40)
@@ -249,6 +247,15 @@ get_char1:
 !:
 }
 
+.macro COUNT_CELL_ROWPTR_SET() {
+    lda (SCRPTRLO),y
+    eor #ALIVE
+    bne !+
+    inc COUNTER
+!:
+}
+
+
 calculate_next_gen:
     // remove inverted cursor:
     lda CURCHAR
@@ -265,89 +272,106 @@ _new_row:
     lda #0
     sta COUNTER
 
+    // save state
     stx ROW
     sty COL
 
-// left column:
+// top row
+    dex
+    bmi row_wrap_to_bottom
+    jmp top_left_cell
+row_wrap_to_bottom:
+    ldx #SCREEN_HEIGHT-1
+
+top_left_cell:
     dey
-    bmi _column_wrap_to_right
-    jmp cell_top_left
-_column_wrap_to_right:
+    bmi !+
+    jmp count_top_left_cell
+!:
     ldy #SCREEN_WIDTH-1
 
-cell_top_left:
-    dex
-    bmi _row_wrap_to_bottom_leftcol
-    jmp count_top_left
-_row_wrap_to_bottom_leftcol:
-    ldx #SCREEN_HEIGHT-1
-count_top_left:
-    COUNT_CELL()
+count_top_left_cell:
+    COUNT_CELL()        // now the ROWPTR is set 
 
-cell_mid_left:
-    ldx ROW
-    COUNT_CELL()
-
-cell_bottom_left:
-    inx
-    cpx #SCREEN_HEIGHT
-    beq _row_wrap_to_top
-    jmp count_bottom_left
-_row_wrap_to_top:
-    ldx #0
-count_bottom_left:
-    COUNT_CELL()
-
-// central column:
+// top_mid_cell:
     ldy COL
-    ldx ROW
-    dex
-    bmi _row_wrap_to_bottom_midcol
-    jmp cell_top_center
-_row_wrap_to_bottom_midcol:
-    ldx #SCREEN_HEIGHT-1
-cell_top_center:
-    COUNT_CELL()
+    COUNT_CELL_ROWPTR_SET()
 
-    ldx ROW
-    inx
-    cpx #SCREEN_HEIGHT
-    beq _row_wrap_to_top_midcol
-    jmp cell_bottom_center
-_row_wrap_to_top_midcol:
-    ldx #0
-cell_bottom_center:
-    COUNT_CELL()
-
-// right col:
+// top_right_cell:
     iny
     cpy #SCREEN_WIDTH
-    beq _column_wrap_to_left
-    jmp cell_top_right
-_column_wrap_to_left:
+    beq !+
+    jmp count_top_right_cell
+!:
     ldy #0
-    
-cell_top_right:
-    ldx ROW
-    dex
-    bmi _row_wrap_to_bottom_rightcol
-    jmp count_cell_top_right
-_row_wrap_to_bottom_rightcol:
-    ldx #SCREEN_HEIGHT-1
-count_cell_top_right:
-    COUNT_CELL()
 
-    ldx ROW
-    COUNT_CELL()
+count_top_right_cell:
+    COUNT_CELL_ROWPTR_SET()
 
+// middle row
+    ldx ROW
+
+// mid_left_cell:
+    ldy COL
+    dey
+    bmi !+
+    jmp count_mid_left_cell
+!:
+    ldy #SCREEN_WIDTH-1
+
+count_mid_left_cell:
+    COUNT_CELL()        // now the ROWPTR is set 
+
+// centre_cell:
+    ldy COL
+    lda (SCRPTRLO),y
+    sta CURCHAR
+
+// mid_right_cell:
+    iny
+    cpy #SCREEN_WIDTH
+    beq !+
+    jmp count_mid_right_cell
+!:
+    ldy #0
+
+count_mid_right_cell:
+    COUNT_CELL_ROWPTR_SET()    
+
+// bottom row
+    ldx ROW
     inx
     cpx #SCREEN_HEIGHT
-    beq _row_wrap_to_top_rightcol
-    jmp count_bottom_right
-_row_wrap_to_top_rightcol:
+    beq row_wrap_to_top
+    jmp bottom_left_cell
+row_wrap_to_top:
     ldx #0
-count_bottom_right:
-    COUNT_CELL()
+
+bottom_left_cell:
+    ldy COL
+    dey
+    bmi !+
+    jmp count_bottom_left_cell
+!:
+    ldy #SCREEN_WIDTH-1
+
+count_bottom_left_cell:
+    COUNT_CELL() 
+
+// bottom_mid_cell:
+    ldy COL
+    COUNT_CELL_ROWPTR_SET()  
+
+// bottom_right_cell:
+    iny
+    cpy #SCREEN_WIDTH
+    beq !+
+    jmp count_bottom_right_cell
+!:
+    ldy #0
+
+count_bottom_right_cell:
+    COUNT_CELL_ROWPTR_SET() 
 
 
 all_around_counted:
@@ -355,9 +379,10 @@ all_around_counted:
     ldy COL
     ldx ROW
 
-    jsr get_char
-    sta CURCHAR
+    // jsr get_char
+    // sta CURCHAR
 
+    lda CURCHAR
     cmp #ALIVE
     beq next_with_cell
     jmp next_no_cell
