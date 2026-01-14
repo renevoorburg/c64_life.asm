@@ -254,6 +254,35 @@ get_char1:
 !:
 }
 
+.macro DEX_WRAP() {
+    dex
+    bpl !+
+    ldx #SCREEN_HEIGHT-1
+!:
+}
+
+.macro INX_WRAP() {
+    inx
+    cpx #SCREEN_HEIGHT
+    bcc !+
+    ldx #0
+!:
+}
+
+.macro DEY_WRAP() {
+    dey
+    bpl !+
+    ldy #SCREEN_WIDTH-1
+!:
+}
+
+.macro INY_WRAP() {
+    iny
+    cpy #SCREEN_WIDTH
+    bcc !+
+    ldy #0
+!:
+}
 
 calculate_next_gen:
     // remove inverted cursor:
@@ -275,105 +304,40 @@ _new_row:
     stx ROW
     sty COL
 
-// top row
-    dex
-    bmi row_wrap_to_bottom
-    jmp top_left_cell
-row_wrap_to_bottom:
-    ldx #SCREEN_HEIGHT-1
-
-top_left_cell:
-    dey
-    bmi !+
-    jmp count_top_left_cell
-!:
-    ldy #SCREEN_WIDTH-1
-
-count_top_left_cell:
+    // top row
+    DEX_WRAP()
+    DEY_WRAP()
     COUNT_CELL()        // now the ROWPTR is set 
-
-// top_mid_cell:
     ldy COL
     COUNT_CELL_ROWPTR_SET()
-
-// top_right_cell:
-    iny
-    cpy #SCREEN_WIDTH
-    beq !+
-    jmp count_top_right_cell
-!:
-    ldy #0
-
-count_top_right_cell:
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET()
 
-// middle row
+    // middle row
     ldx ROW
-
-// mid_left_cell:
     ldy COL
-    dey
-    bmi !+
-    jmp count_mid_left_cell
-!:
-    ldy #SCREEN_WIDTH-1
+    DEY_WRAP()
+    COUNT_CELL()
 
-count_mid_left_cell:
-    COUNT_CELL()        // now the ROWPTR is set 
-
-// centre_cell:
+    // centre_cell -> CURCHAR:
     ldy COL
     lda (SCRPTRLO),y
     sta CURCHAR
 
-// mid_right_cell:
-    iny
-    cpy #SCREEN_WIDTH
-    beq !+
-    jmp count_mid_right_cell
-!:
-    ldy #0
-
-count_mid_right_cell:
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET()    
 
-// bottom row
+    // bottom row
     ldx ROW
-    inx
-    cpx #SCREEN_HEIGHT
-    beq row_wrap_to_top
-    jmp bottom_left_cell
-row_wrap_to_top:
-    ldx #0
-
-bottom_left_cell:
+    INX_WRAP()
     ldy COL
-    dey
-    bmi !+
-    jmp count_bottom_left_cell
-!:
-    ldy #SCREEN_WIDTH-1
-
-count_bottom_left_cell:
+    DEY_WRAP()
     COUNT_CELL() 
-
-// bottom_mid_cell:
     ldy COL
     COUNT_CELL_ROWPTR_SET()  
-
-// bottom_right_cell:
-    iny
-    cpy #SCREEN_WIDTH
-    beq !wrap+
-    jmp count_bottom_right_cell
-!wrap:
-    ldy #0
-
-count_bottom_right_cell:
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET() 
 
-all_around_counted:
-    // reset ROW, COL, y, x
     ldy COL
     ldx ROW
 
@@ -406,8 +370,6 @@ continue_next_gen_loop:
     jsr $ffe4
     cmp #$51
     beq quit
-    cmp #$45         // 'E'
-    beq jump_edit_loop
     jmp next_gen_loop
 
 // trampoline:
@@ -432,9 +394,6 @@ new_column_jmp:
     sta get_char + 2
 
     rts
-
-jump_edit_loop:
-    jmp edit_loop
 
 no_cell_next_gen:
     lda COUNTER
