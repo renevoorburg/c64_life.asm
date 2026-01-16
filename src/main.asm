@@ -291,9 +291,9 @@ calculate_next_gen:
 
     jsr display_screen0 // setup screen for switching
 next_gen_loop:
-    ldy #0
+    ldy #1
 _new_column:
-    ldx #0
+    ldx #1
 _new_row:
     stx ROW
     
@@ -305,37 +305,37 @@ _new_row:
     sty COL
 
     // top row
-    DEX_WRAP()
-    DEY_WRAP()
+    dex
+    dey
     COUNT_CELL()        // now the ROWPTR is set 
-    ldy COL
+    iny
     COUNT_CELL_ROWPTR_SET()
-    INY_WRAP()
+    iny
     COUNT_CELL_ROWPTR_SET()
 
     // middle row
     ldx ROW
     ldy COL
-    DEY_WRAP()
+    dey
     COUNT_CELL()
 
     // centre_cell -> CURCHAR:
-    ldy COL
+    iny
     lda (SCRPTRLO),y
     sta CURCHAR
 
-    INY_WRAP()
+    iny
     COUNT_CELL_ROWPTR_SET()    
 
     // bottom row
     ldx ROW
-    INX_WRAP()
+    inx
     ldy COL
-    DEY_WRAP()
+    dey
     COUNT_CELL() 
-    ldy COL
+    iny
     COUNT_CELL_ROWPTR_SET()  
-    INY_WRAP()
+    iny
     COUNT_CELL_ROWPTR_SET() 
 
     ldy COL
@@ -357,10 +357,10 @@ set_alive_next_gen:
 
 continue_next_gen_loop:    
     inx
-    cpx #SCREEN_HEIGHT
+    cpx #SCREEN_HEIGHT-1
     bne new_row_jmp
     iny
-    cpy #SCREEN_WIDTH
+    cpy #SCREEN_WIDTH-1
     bne new_column_jmp
     
     jsr flip_screen
