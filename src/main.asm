@@ -11,7 +11,7 @@ BasicUpstart2(setup_board)
 .const SCREEN0 = $0400
 .const SCREEN1 = $2000 
 
-.const ALIVE = $2a // '*'
+.const ALIVE = $21 // '!'
 .const EMPTY = $20 // ' '
 
 .const CURCHAR = $02
