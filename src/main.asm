@@ -353,7 +353,6 @@ _new_row:
 set_alive_next_gen:
     lda #ALIVE
     jsr plot_char
-    jmp continue_next_gen_loop
 
 continue_next_gen_loop:    
     inx
