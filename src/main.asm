@@ -10,12 +10,13 @@ BasicUpstart2(setup_board)
 .const SCREEN_HEIGHT = 25
 .const SCREEN0 = $0400
 .const SCREEN1 = $2000 
+.const COUNTS = $3000 
 
-.const ALIVE = $21 // '!'
+.const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
 
-.const CURCHAR = $02
-.const COUNTER = $03
+.const COUNTSLO = $02
+.const COUNTSHI = $03
 
 .const S0BASELO = $f7
 .const S0BASEHI = $f8
@@ -36,7 +37,16 @@ rowoff1_lo:
 rowoff1_hi:
     .fill 25, >(SCREEN1 + i*40)
 
+countoff_lo:
+    .fill 25, <(COUNTS + i*40)
+countoff_hi:
+    .fill 25, >(COUNTS + i*40)
+
 key:
+    .byte 0
+CURCHAR:
+    .byte 0
+COUNTER:
     .byte 0
 
 setup_board:
@@ -237,6 +247,25 @@ get_char1:
 
 // 
 
+.macro STORE_COUNT() {
+    pha
+    lda countoff_lo,x
+    sta COUNTSLO
+    lda countoff_hi,x
+    sta COUNTSHI
+    pla
+    sta (COUNTSLO),y
+
+}
+
+.macro GET_COUNT() {
+    lda countoff_lo,x
+    sta COUNTSLO
+    lda countoff_hi,x
+    sta COUNTSHI
+    lda (COUNTSLO),y
+
+}
 
 .macro COUNT_CELL() {
     jsr get_char
@@ -290,77 +319,97 @@ calculate_next_gen:
     jsr plot_char
 
     jsr display_screen0 // setup screen for switching
-next_gen_loop:
-    ldy #1
-_new_column:
-    ldx #1
-_new_row:
-    stx ROW
-    
-    lda #0
-    sta COUNTER
 
-    // save state
+init_counts:
+    ldy #0
+_counts_new_column:
+    ldx #0
+_counts_new_row:
     stx ROW
     sty COL
 
+    lda #0
+    sta COUNTER
+
     // top row
-    dex
-    dey
+    DEX_WRAP()
+    DEY_WRAP()
     COUNT_CELL()        // now the ROWPTR is set 
-    iny
+    ldy COL
     COUNT_CELL_ROWPTR_SET()
-    iny
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET()
 
     // middle row
     ldx ROW
     ldy COL
-    dey
+    DEY_WRAP()
     COUNT_CELL()
 
-    // centre_cell -> CURCHAR:
-    iny
-    lda (SCRPTRLO),y
-    sta CURCHAR
-
-    iny
+    ldy COL
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET()    
 
     // bottom row
     ldx ROW
-    inx
+    INX_WRAP()
     ldy COL
-    dey
+    DEY_WRAP()
     COUNT_CELL() 
-    iny
+    ldy COL
     COUNT_CELL_ROWPTR_SET()  
-    iny
+    INY_WRAP()
     COUNT_CELL_ROWPTR_SET() 
 
     ldy COL
     ldx ROW
-
-    lda CURCHAR
-    cmp #ALIVE
-    bne no_cell_next_gen
-    
     lda COUNTER
-    cmp #02
-    bcc set_empty_next_gen
-    cmp #04
-    bcs set_empty_next_gen
-set_alive_next_gen:
-    lda #ALIVE
-    jsr plot_char
-    jmp continue_next_gen_loop
+    STORE_COUNT()
+
+    inx
+    cpx #SCREEN_HEIGHT
+    bne _counts_new_row_jmp
+    iny
+    cpy #SCREEN_WIDTH
+    bne _counts_new_column_jmp
+
+
+// trampoline:
+jmp next_gen_loop
+
+_counts_new_row_jmp:
+    jmp _counts_new_row 
+_counts_new_column_jmp:
+    jmp _counts_new_column
+
+
+next_gen_loop:
+    ldy #0
+_new_column:
+    ldx #0
+_new_row:
+    stx ROW
+    sty COL
+    
+    GET_COUNT()
+    sta COUNTER
+
+    jsr get_char
+    cmp #ALIVE
+    beq _is_alive
+
+// _is_empty:
+//     lda COUNTER
+//     cmp #03
+//     beq set_alive
+    
 
 continue_next_gen_loop:    
     inx
-    cpx #SCREEN_HEIGHT-1
+    cpx #SCREEN_HEIGHT
     bne new_row_jmp
     iny
-    cpy #SCREEN_WIDTH-1
+    cpy #SCREEN_WIDTH
     bne new_column_jmp
     
     jsr flip_screen
@@ -395,11 +444,16 @@ new_column_jmp:
 
     rts
 
-no_cell_next_gen:
-    lda COUNTER
-    cmp #03
-    beq set_alive_next_gen
-set_empty_next_gen:
-    lda #EMPTY
-    jsr plot_char
-    jmp continue_next_gen_loop
+// set_alive:
+//     lda #EMPTY
+//     jsr plot_char
+
+
+// no_cell_next_gen:
+//     lda COUNTER
+//     cmp #03
+//     beq set_alive_next_gen
+// set_empty_next_gen:
+//     lda #EMPTY
+//     jsr plot_char
+//     jmp continue_next_gen_loop
