@@ -1,459 +1,185 @@
-// conway's game of life
-// rv
-
-// speedtest: glider down 33s
+//wip 
 
 *=$0801
-BasicUpstart2(setup_board)
-
-.const SCREEN_WIDTH  = 40
-.const SCREEN_HEIGHT = 25
-.const SCREEN0 = $0400
-.const SCREEN1 = $2000 
-.const COUNTS = $3000 
+BasicUpstart2(main)
 
 .const ALIVE = $2a // '*'
 .const EMPTY = $20 // ' '
 
-.const COUNTSLO = $02
-.const COUNTSHI = $03
+.const SCREEN_WIDTH  = 40
+.const SCREEN_HEIGHT = 25
+.const SCREEN = $0400
+.const COUNTS = $0c00
 
-.const S0BASELO = $f7
-.const S0BASEHI = $f8
-.const S1BASELO = $f9
-.const S1BASEHI = $fa
-.const COL = $fb
-.const ROW = $fc
-.const SCRPTRLO = $fd
-.const SCRPTRHI = $fe
+.const SCR_LINE_PTRLO = $fd
+.const SCR_LINE_PTRHI = $fe
 
-rowoff0_lo:
-    .fill 25, <(SCREEN0 + i*40)
-rowoff0_hi:
-    .fill 25, >(SCREEN0 + i*40)
+.const CNT_CUR_LINE_PTRLO = $fb
+.const CNT_CUR_LINE_PTRHI = $fc
 
-rowoff1_lo:
-    .fill 25, <(SCREEN1 + i*40)
-rowoff1_hi:
-    .fill 25, >(SCREEN1 + i*40)
+.const CNT_PREV_LINE_PTRLO = $f7
+.const CNT_PREV_LINE_PTRHI = $f8
 
-countoff_lo:
-    .fill 25, <(COUNTS + i*40)
-countoff_hi:
-    .fill 25, >(COUNTS + i*40)
+.const CNT_NEXT_LINE_PTRLO = $f9
+.const CNT_NEXT_LINE_PTRHI = $fa
 
-key:
+
+ROWOFF_SCREEN_LO:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte <(SCREEN + i*SCREEN_WIDTH)
+ROWOFF_SCREEN_HI:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte >(SCREEN + i*SCREEN_WIDTH)
+
+ROWOFF_COUNTS_LO:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte <(COUNTS + i*SCREEN_WIDTH)
+ROWOFF_COUNTS_HI:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte >(COUNTS + i*SCREEN_WIDTH)
+
+// Vorige rij met wrap
+ROWOFF_COUNTS_PREV_LO:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte <(COUNTS + ((i==0) ? (SCREEN_HEIGHT-1) : (i-1)) * SCREEN_WIDTH)
+ROWOFF_COUNTS_PREV_HI:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte >(COUNTS + ((i==0) ? (SCREEN_HEIGHT-1) : (i-1)) * SCREEN_WIDTH)
+
+// Volgende rij met wrap 
+ROWOFF_COUNTS_NEXT_LO:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte <(COUNTS + ((i==(SCREEN_HEIGHT-1)) ? 0 : (i+1)) * SCREEN_WIDTH)
+ROWOFF_COUNTS_NEXT_HI:
+    .for (var i=0; i<SCREEN_HEIGHT; i++) .byte >(COUNTS + ((i==(SCREEN_HEIGHT-1)) ? 0 : (i+1)) * SCREEN_WIDTH)
+
+
+COLUMN:
     .byte 0
-CURCHAR:
-    .byte 0
-COUNTER:
-    .byte 0
 
-setup_board:
-    // blank screen
-    // lda #$93
-    // jsr $ffd2
 
-    // prepare keyboard
-    lda #1
-    sta $0289  //  disable keyboard buffer
-    lda #127
-    sta $028a  // disable key repeat
-
-    // clean  screen1
-    ldy #0
-redraw_new_column:
-    sty COL
-    ldx #0
-redraw_new_row:
-    stx ROW
-    lda #EMPTY
-    jsr plot_char1
-    ldx ROW
-    ldy COL
-    inx
-    cpx #SCREEN_HEIGHT
-    bne redraw_new_row
+// reset counts to zero
+reset_counts:
+    lda #<COUNTS
+    sta $fb
+    lda #>COUNTS
+    sta $fc
+    lda #$0
+    ldx #$03                // 3 x 256 cells
+reset_page_loop:
+    ldy #$00
+reset_cell_loop:
+    sta ($fb),y
     iny
-    cpy #SCREEN_WIDTH
-    bne redraw_new_column
-
-    // set initial cursor position
-    ldx #5
-    ldy #5
-
-edit_loop:
-    // get CURCHAR : character at current position
-    jsr get_char0
-    sta CURCHAR
-
-draw_cursor:
-    // draw_cursor as inversed character   
-    eor #$80
-    jsr plot_char0
-
-readkey:
-    stx ROW
-    sty COL
-    jsr $ff9f
-    jsr $ffe4
-    sta key
-    ldx ROW
-    ldy COL
-    lda key
-    beq readkey
-    cmp #$41         // 'A'
-    beq cursor_left
-    cmp #$53         // 'S'
-    beq cursor_right
-    cmp #$57         // 'W'
-    beq cursor_up
-    cmp #$5A         // 'Z'
-    beq cursor_down
-    cmp #$51         // 'Q'
-    beq jump_calculate_next_gen
-    cmp #$20         // ' '
-    beq toggle_cell
-    jmp readkey  
-
-jump_calculate_next_gen:
-    jmp calculate_next_gen
-
-cursor_left:
-    cpy #0
-    beq readkey
-    lda CURCHAR
-    jsr plot_char0
-    dey
-    jmp edit_loop
-
-cursor_right: 
-    cpy #(SCREEN_WIDTH-1)
-    beq readkey
-    lda CURCHAR
-    jsr plot_char0
-    iny
-    jmp edit_loop   
-
-cursor_up: 
-    cpx #0
-    beq readkey
-    lda CURCHAR
-    jsr plot_char0
+    bne reset_cell_loop
+    inc $fc
     dex
-    jmp edit_loop
+    bne reset_page_loop
+    ldy #$00                // remaining 232 bytes 
+reset_tail_loop:
+    sta ($fb),y
+    iny
+    cpy #$E8         
+    bne reset_tail_loop
+    rts
 
-cursor_down: 
-    cpx #(SCREEN_HEIGHT-1)
-    beq readkey
-    lda CURCHAR
-    jsr plot_char0
-    inx
-    jmp edit_loop
 
-toggle_cell:
-    lda CURCHAR
+main:
+    jsr reset_counts
+    jmp update_counts
+
+next_cell_jmp:
+    jmp next_cell
+
+//
+// update COUNTS for whole board:
+//
+update_counts:
+    ldx #0                  // first ROW
+    
+next_column:
+    ldy #0                  // first COLUMN of new ROW
+
+    lda ROWOFF_SCREEN_LO,x
+    sta SCR_LINE_PTRLO
+    lda ROWOFF_SCREEN_HI,x
+    sta SCR_LINE_PTRHI    
+
+    lda ROWOFF_COUNTS_LO,x
+    sta CNT_CUR_LINE_PTRLO
+    lda ROWOFF_COUNTS_HI,x
+    sta CNT_CUR_LINE_PTRHI
+
+    lda ROWOFF_COUNTS_PREV_LO,x
+    sta CNT_PREV_LINE_PTRLO
+    lda ROWOFF_COUNTS_PREV_HI,x
+    sta CNT_PREV_LINE_PTRHI
+
+    lda ROWOFF_COUNTS_NEXT_LO,x
+    sta CNT_NEXT_LINE_PTRLO
+    lda ROWOFF_COUNTS_NEXT_HI,x
+    sta CNT_NEXT_LINE_PTRHI
+
+check_cell:
+    lda (SCR_LINE_PTRLO),y
     cmp #ALIVE
-    beq _remove_cell
-    lda #ALIVE
-_set_curchar:
-    sta CURCHAR
-    jmp draw_cursor
-_remove_cell:
-    lda #EMPTY
-    jmp _set_curchar
+    bne next_cell_jmp
+ 
+    lda (CNT_PREV_LINE_PTRLO),y
+    adc #1
+    sta (CNT_PREV_LINE_PTRLO),y
 
+    lda (CNT_NEXT_LINE_PTRLO),y
+    adc #1
+    sta (CNT_NEXT_LINE_PTRLO),y
 
-flip_screen:
-    lda $d018
-    and #$f0
-    cmp #$10
-    beq display_screen1
+    sty COLUMN
 
-display_screen0:
-    lda #$14        // show screen0 - $0400
-    sta $d018
-
-    // write to screen1
-    lda #<plot_char1
-    sta plot_char + 1
-    lda #>plot_char1
-    sta plot_char + 2
-
-    // read from screen0
-    lda #<get_char0
-    sta get_char + 1
-    lda #>get_char0
-    sta get_char + 2
-    rts
-
-display_screen1:
-    lda #$84        // show screen1 - $0800
-    sta $d018
-    // write to screen0
-    lda #<plot_char0
-    sta plot_char + 1
-    lda #>plot_char0
-    sta plot_char + 2
-
-    // read from screen1
-    lda #<get_char1
-    sta get_char + 1
-    lda #>get_char1
-    sta get_char + 2
-    rts
-
-plot_char:
-    jmp plot_char0 // dynamically changed
-
-plot_char0:
-    pha
-    lda rowoff0_lo,x
-    sta SCRPTRLO
-    lda rowoff0_hi,x
-    sta SCRPTRHI
-    pla
-    sta (SCRPTRLO),y
-    rts
-
-plot_char1:
-    pha
-    lda rowoff1_lo,x
-    sta SCRPTRLO
-    lda rowoff1_hi,x
-    sta SCRPTRHI
-    pla
-    sta (SCRPTRLO),y
-    rts
-
-get_char:
-    jmp get_char0 // dynamically changed
-
-get_char0:
-    lda rowoff0_lo,x
-    sta SCRPTRLO
-    lda rowoff0_hi,x
-    sta SCRPTRHI
-    lda (SCRPTRLO),y
-    rts
-
-get_char1:
-    lda rowoff1_lo,x
-    sta SCRPTRLO
-    lda rowoff1_hi,x
-    sta SCRPTRHI
-    lda (SCRPTRLO),y
-    rts
-
-// 
-
-.macro STORE_COUNT() {
-    pha
-    lda countoff_lo,x
-    sta COUNTSLO
-    lda countoff_hi,x
-    sta COUNTSHI
-    pla
-    sta (COUNTSLO),y
-
-}
-
-.macro GET_COUNT() {
-    lda countoff_lo,x
-    sta COUNTSLO
-    lda countoff_hi,x
-    sta COUNTSHI
-    lda (COUNTSLO),y
-
-}
-
-.macro COUNT_CELL() {
-    jsr get_char
-    eor #ALIVE
-    bne !+
-    inc COUNTER
-!:
-}
-
-.macro COUNT_CELL_ROWPTR_SET() {
-    lda (SCRPTRLO),y
-    eor #ALIVE
-    bne !+
-    inc COUNTER
-!:
-}
-
-.macro DEX_WRAP() {
-    dex
-    bpl !+
-    ldx #SCREEN_HEIGHT-1
-!:
-}
-
-.macro INX_WRAP() {
-    inx
-    cpx #SCREEN_HEIGHT
-    bcc !+
-    ldx #0
-!:
-}
-
-.macro DEY_WRAP() {
     dey
-    bpl !+
-    ldy #SCREEN_WIDTH-1
-!:
-}
+    bpl no_wrap_to_right
+    ldx #SCREEN_WIDTH-1
+no_wrap_to_right:
+    clc
+    
+    lda (CNT_CUR_LINE_PTRLO),y
+    adc #1
+    sta (CNT_CUR_LINE_PTRLO),y
+    
+    lda (CNT_PREV_LINE_PTRLO),y
+    adc #1
+    sta (CNT_PREV_LINE_PTRLO),y
 
-.macro INY_WRAP() {
+    lda (CNT_NEXT_LINE_PTRLO),y
+    adc #1
+    sta (CNT_NEXT_LINE_PTRLO),y
+
+    ldy COLUMN
     iny
     cpy #SCREEN_WIDTH
-    bcc !+
+    bne no_wrap_to_left
     ldy #0
-!:
-}
+no_wrap_to_left:
+    clc
 
-calculate_next_gen:
-    // remove inverted cursor:
-    lda CURCHAR
-    jsr plot_char
+    lda (CNT_CUR_LINE_PTRLO),y
+    adc #1
+    sta (CNT_CUR_LINE_PTRLO),y
 
-    jsr display_screen0 // setup screen for switching
+    lda (CNT_PREV_LINE_PTRLO),y
+    adc #1
+    sta (CNT_PREV_LINE_PTRLO),y
 
-init_counts:
-    ldy #0
-_counts_new_column:
-    ldx #0
-_counts_new_row:
-    stx ROW
-    sty COL
+    lda (CNT_NEXT_LINE_PTRLO),y
+    adc #1
+    sta (CNT_NEXT_LINE_PTRLO),y
 
-    lda #0
-    sta COUNTER
+    ldy COLUMN
 
-    // top row
-    DEX_WRAP()
-    DEY_WRAP()
-    COUNT_CELL()        // now the ROWPTR is set 
-    ldy COL
-    COUNT_CELL_ROWPTR_SET()
-    INY_WRAP()
-    COUNT_CELL_ROWPTR_SET()
-
-    // middle row
-    ldx ROW
-    ldy COL
-    DEY_WRAP()
-    COUNT_CELL()
-
-    ldy COL
-    INY_WRAP()
-    COUNT_CELL_ROWPTR_SET()    
-
-    // bottom row
-    ldx ROW
-    INX_WRAP()
-    ldy COL
-    DEY_WRAP()
-    COUNT_CELL() 
-    ldy COL
-    COUNT_CELL_ROWPTR_SET()  
-    INY_WRAP()
-    COUNT_CELL_ROWPTR_SET() 
-
-    ldy COL
-    ldx ROW
-    lda COUNTER
-    STORE_COUNT()
-
-    inx
+ next_cell:
+    iny                     // next column
+    cpy #SCREEN_WIDTH
+    bne check_cell_jmp
+    inx                     // next row
     cpx #SCREEN_HEIGHT
-    bne _counts_new_row_jmp
-    iny
-    cpy #SCREEN_WIDTH
-    bne _counts_new_column_jmp
-
-
-// trampoline:
-jmp next_gen_loop
-
-_counts_new_row_jmp:
-    jmp _counts_new_row 
-_counts_new_column_jmp:
-    jmp _counts_new_column
-
-
-next_gen_loop:
-    ldy #0
-_new_column:
-    ldx #0
-_new_row:
-    stx ROW
-    sty COL
-    
-    GET_COUNT()
-    sta COUNTER
-
-    jsr get_char
-    cmp #ALIVE
-    beq _is_alive
-
-// _is_empty:
-//     lda COUNTER
-//     cmp #03
-//     beq set_alive
-    
-
-continue_next_gen_loop:    
-    inx
-    cpx #SCREEN_HEIGHT
-    bne new_row_jmp
-    iny
-    cpy #SCREEN_WIDTH
-    bne new_column_jmp
-    
-    jsr flip_screen
-
-// read key
-    jsr $ff9f
-    jsr $ffe4
-    cmp #$51
-    beq quit
-    jmp next_gen_loop
-
-// trampoline:
-new_row_jmp:
-    jmp _new_row  
-new_column_jmp:
-    jmp _new_column
-
- quit:
-    lda #$14        // show screen0 - $0400
-    sta $d018
-
-    // reset dynamic code
-    lda #<plot_char0
-    sta plot_char + 1
-    lda #>plot_char0
-    sta plot_char + 2
-
-    lda #<get_char0
-    sta get_char + 1
-    lda #>get_char0
-    sta get_char + 2
+    bne next_column_jmp
 
     rts
 
-// set_alive:
-//     lda #EMPTY
-//     jsr plot_char
+check_cell_jmp:
+    jmp check_cell
 
-
-// no_cell_next_gen:
-//     lda COUNTER
-//     cmp #03
-//     beq set_alive_next_gen
-// set_empty_next_gen:
-//     lda #EMPTY
-//     jsr plot_char
-//     jmp continue_next_gen_loop
+next_column_jmp:
+    jmp next_column
