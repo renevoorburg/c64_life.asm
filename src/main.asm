@@ -1,4 +1,5 @@
-//wip 
+//game of life 
+// glidertest in 6 sec iso 33
 
 *=$0801
 BasicUpstart2(main)
@@ -9,7 +10,7 @@ BasicUpstart2(main)
 .const SCREEN_WIDTH  = 40
 .const SCREEN_HEIGHT = 25
 .const SCREEN = $0400
-.const COUNTS = $0c00
+.const COUNTS = $3000
 
 .const SCR_LINE_PTRLO = $fd
 .const SCR_LINE_PTRHI = $fe
@@ -79,18 +80,18 @@ reset_tail_loop:
 
 main:
     jsr reset_counts
-    jmp update_counts
+    jmp counts_updater
 
-next_cell_jmp:
-    jmp next_cell
+cu_next_cell_jmp:
+    jmp cu_next_cell
 
 //
-// update COUNTS for whole board:
+// cu_: update COUNTS for whole board:
 //
-update_counts:
+counts_updater:
     ldx #0                  // first ROW
     
-next_column:
+cu_next_column:
     ldy #0                  // first COLUMN of new ROW
 
     lda ROWOFF_SCREEN_LO,x
@@ -113,15 +114,17 @@ next_column:
     lda ROWOFF_COUNTS_NEXT_HI,x
     sta CNT_NEXT_LINE_PTRHI
 
-check_cell:
+cu_check_cell:
     lda (SCR_LINE_PTRLO),y
     cmp #ALIVE
-    bne next_cell_jmp
+    bne cu_next_cell_jmp
  
+    clc
     lda (CNT_PREV_LINE_PTRLO),y
     adc #1
     sta (CNT_PREV_LINE_PTRLO),y
 
+    clc
     lda (CNT_NEXT_LINE_PTRLO),y
     adc #1
     sta (CNT_NEXT_LINE_PTRLO),y
@@ -129,19 +132,20 @@ check_cell:
     sty COLUMN
 
     dey
-    bpl no_wrap_to_right
-    ldx #SCREEN_WIDTH-1
-no_wrap_to_right:
+    bpl cu_no_wrap_to_right
+    ldy #SCREEN_WIDTH-1
+cu_no_wrap_to_right:
     clc
-    
     lda (CNT_CUR_LINE_PTRLO),y
     adc #1
     sta (CNT_CUR_LINE_PTRLO),y
     
+    clc
     lda (CNT_PREV_LINE_PTRLO),y
     adc #1
     sta (CNT_PREV_LINE_PTRLO),y
 
+    clc
     lda (CNT_NEXT_LINE_PTRLO),y
     adc #1
     sta (CNT_NEXT_LINE_PTRLO),y
@@ -149,37 +153,101 @@ no_wrap_to_right:
     ldy COLUMN
     iny
     cpy #SCREEN_WIDTH
-    bne no_wrap_to_left
+    bne cu_no_wrap_to_left
     ldy #0
-no_wrap_to_left:
+cu_no_wrap_to_left:
     clc
-
     lda (CNT_CUR_LINE_PTRLO),y
     adc #1
     sta (CNT_CUR_LINE_PTRLO),y
 
+    clc
     lda (CNT_PREV_LINE_PTRLO),y
     adc #1
     sta (CNT_PREV_LINE_PTRLO),y
 
+    clc
     lda (CNT_NEXT_LINE_PTRLO),y
     adc #1
     sta (CNT_NEXT_LINE_PTRLO),y
 
     ldy COLUMN
 
- next_cell:
+ cu_next_cell:
     iny                     // next column
     cpy #SCREEN_WIDTH
-    bne check_cell_jmp
+    bne cu_check_cell_jmp
     inx                     // next row
     cpx #SCREEN_HEIGHT
-    bne next_column_jmp
+    bne cu_next_column_jmp
 
+    jmp update_screen
+
+cu_check_cell_jmp:
+    jmp cu_check_cell
+
+cu_next_column_jmp:
+    jmp cu_next_column
+
+
+// us_ update screen
+update_screen:
+    ldx #0                  // first ROW
+    
+us_next_column:
+    ldy #0                  // first COLUMN of new ROW
+
+    lda ROWOFF_SCREEN_LO,x
+    sta SCR_LINE_PTRLO
+    lda ROWOFF_SCREEN_HI,x
+    sta SCR_LINE_PTRHI    
+
+    lda ROWOFF_COUNTS_LO,x
+    sta CNT_CUR_LINE_PTRLO
+    lda ROWOFF_COUNTS_HI,x
+    sta CNT_CUR_LINE_PTRHI
+
+us_check_cell:
+    lda (CNT_CUR_LINE_PTRLO), y
+    
+    cmp #3
+    beq us_make_alive
+
+    cmp #2
+    bne us_make_dead
+
+    lda (SCR_LINE_PTRLO),y // nu alleen blijven leven als huidige cel levend is
+    cmp #EMPTY
+    beq us_make_dead
+
+us_make_alive:
+    lda #ALIVE
+    jmp us_next_cell
+    
+us_make_dead:
+    lda #EMPTY
+
+us_next_cell:
+    sta (SCR_LINE_PTRLO),y 
+
+    lda #0
+    sta (CNT_CUR_LINE_PTRLO), y
+
+    iny                     // next column
+    cpy #SCREEN_WIDTH
+    bne us_check_cell
+    inx                     // next row
+    cpx #SCREEN_HEIGHT
+    bne us_next_column
+
+    // read key
+    jsr $ff9f
+    jsr $ffe4
+    cmp #$51
+    beq quit
+
+
+jmp counts_updater
+
+quit:
     rts
-
-check_cell_jmp:
-    jmp check_cell
-
-next_column_jmp:
-    jmp next_column
